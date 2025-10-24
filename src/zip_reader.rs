@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 
 /// Represents a file entry in a ZIP archive
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ZipEntry {
     pub name: String,
     pub data: Vec<u8>,
