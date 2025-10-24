@@ -3,7 +3,6 @@ use chrono::NaiveDate;
 use exif::{In, Tag};
 
 /// Trait for extracting date information from image data
-/// Following Dependency Inversion Principle - depend on abstraction
 pub trait DateExtractor {
     fn extract_date(&self, image_data: &[u8]) -> Result<NaiveDate>;
 }
@@ -51,8 +50,6 @@ impl DateExtractor for ExifDateExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // AAA Pattern: Arrange, Act, Assert
 
     #[test]
     fn test_extract_date_from_valid_exif() {
