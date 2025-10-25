@@ -43,7 +43,7 @@ impl<'a> PhotoOrganizer<'a> {
 
         for entry in entries {
             // Apply filter first
-            if !self.photo_filter.should_include(&entry.data) {
+            if !self.photo_filter.should_include(&entry.name, &entry.data) {
                 skipped_files += 1;
                 continue;
             }
@@ -102,7 +102,7 @@ mod tests {
     use crate::exif::ExifDateExtractor;
     use crate::file_writer::RealFileSystemWriter;
     use crate::path_generator::PathGenerator;
-    use crate::photo_filter::{NoFilter, LightroomFilter};
+    use crate::photo_filter::NoFilter;
     use chrono::NaiveDate;
     use std::fs;
     use std::path::PathBuf;
