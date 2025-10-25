@@ -34,20 +34,33 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    display_configuration(&args);
 
+    let result = organize_photos_from_zip(&args);
+
+    display_results_and_exit(result);
+}
+
+fn display_configuration(args: &Args) {
     println!("Organizing photos from: {}", args.input);
     println!("Output directory: {}", args.output);
-    if args.no_filter {
+    display_filter_status(args.no_filter);
+    println!();
+}
+
+fn display_filter_status(filtering_disabled: bool) {
+    if filtering_disabled {
         println!("Filtering: Disabled (organizing all photos)");
     } else {
         println!("Filtering: Skipping existing collection photos (DSLR, Lightroom, Google -MIX/-edited files)");
     }
-    println!();
+}
 
-    let zip_reader = FileZipImageReader::new(args.input);
+fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, anyhow::Error> {
+    let zip_reader = FileZipImageReader::new(args.input.clone());
     let date_extractor = CompositeDateExtractor::new();
     let path_generator = PathGenerator::new();
-    let file_writer = RealFileSystemWriter::new(args.output);
+    let file_writer = RealFileSystemWriter::new(args.output.clone());
     let existing_collection_filter = ExistingCollectionFilter::new();
     let no_filter = NoFilter::new();
 
@@ -65,30 +78,51 @@ fn main() {
         filter,
     );
 
-    if !args.no_filter {
-        if let Err(e) = organizer.validate_no_orphaned_edits() {
-            eprintln!("✗ Validation failed: {}", e);
-            std::process::exit(1);
-        }
+    validate_zip_contents_if_filtering(&organizer, args.no_filter)?;
+    organizer.organize()
+}
+
+fn validate_zip_contents_if_filtering(
+    organizer: &PhotoOrganizer,
+    filtering_disabled: bool,
+) -> Result<(), anyhow::Error> {
+    if !filtering_disabled {
+        organizer.validate_no_orphaned_edits()?;
     }
+    Ok(())
+}
 
-    match organizer.organize() {
+fn display_results_and_exit(result: Result<organizer::OrganizeResult, anyhow::Error>) -> ! {
+    match result {
         Ok(result) => {
-            println!("✓ Organization complete!");
-            println!("  Total files: {}", result.total_files);
-            println!("  Organized: {}", result.organized_files);
-            println!("  Skipped: {}", result.skipped_files);
-
-            if !result.errors.is_empty() {
-                println!("\nErrors:");
-                for error in &result.errors {
-                    println!("  - {}", error);
-                }
-            }
+            display_success_summary(&result);
+            std::process::exit(0);
         }
         Err(e) => {
-            eprintln!("✗ Failed to organize photos: {}", e);
+            display_failure_message(&e);
             std::process::exit(1);
         }
     }
+}
+
+fn display_success_summary(result: &organizer::OrganizeResult) {
+    println!("✓ Organization complete!");
+    println!("  Total files: {}", result.total_files);
+    println!("  Organized: {}", result.organized_files);
+    println!("  Skipped: {}", result.skipped_files);
+
+    display_errors_if_any(&result.errors);
+}
+
+fn display_errors_if_any(errors: &[String]) {
+    if !errors.is_empty() {
+        println!("\nErrors:");
+        for error in errors {
+            println!("  - {}", error);
+        }
+    }
+}
+
+fn display_failure_message(error: &anyhow::Error) {
+    eprintln!("✗ Failed to organize photos: {}", error);
 }
