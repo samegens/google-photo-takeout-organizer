@@ -14,36 +14,40 @@ impl ExifDateExtractor {
     pub fn new() -> Self {
         Self
     }
-}
 
-impl DateExtractor for ExifDateExtractor {
-    fn extract_date(&self, _filename: &str, image_data: &[u8]) -> Result<NaiveDate> {
+    fn read_exif_from_image(image_data: &[u8]) -> Result<exif::Exif> {
         let mut cursor = std::io::Cursor::new(image_data);
         let exif_reader = exif::Reader::new();
-
-        let exif_data = exif_reader
+        exif_reader
             .read_from_container(&mut cursor)
-            .context("Failed to read EXIF data from image")?;
+            .context("Failed to read EXIF data from image")
+    }
 
-        // Try to get DateTimeOriginal (when photo was taken)
-        let date_field = exif_data
+    fn get_datetime_original_field(exif_data: &exif::Exif) -> Result<&exif::Field> {
+        exif_data
             .get_field(Tag::DateTimeOriginal, In::PRIMARY)
-            .context("No DateTimeOriginal field found in EXIF data")?;
+            .context("No DateTimeOriginal field found in EXIF data")
+    }
 
-        // EXIF dates are in format: "YYYY:MM:DD HH:MM:SS"
-        let date_str = date_field.display_value().to_string();
-
-        // Parse the date portion (first 10 characters: YYYY:MM:DD)
-        let date_part = date_str
+    fn parse_exif_date_string(exif_date_string: &str) -> Result<NaiveDate> {
+        let date_part = exif_date_string
             .split_whitespace()
             .next()
             .context("Invalid EXIF date format")?;
 
-        // Replace colons with dashes for parsing: YYYY:MM:DD -> YYYY-MM-DD
         let normalized_date = date_part.replace(':', "-");
 
         NaiveDate::parse_from_str(&normalized_date, "%Y-%m-%d")
             .context("Failed to parse date from EXIF")
+    }
+}
+
+impl DateExtractor for ExifDateExtractor {
+    fn extract_date(&self, _filename: &str, image_data: &[u8]) -> Result<NaiveDate> {
+        let exif_data = Self::read_exif_from_image(image_data)?;
+        let datetime_original_field = Self::get_datetime_original_field(&exif_data)?;
+        let date_string = datetime_original_field.display_value().to_string();
+        Self::parse_exif_date_string(&date_string)
     }
 }
 
@@ -56,45 +60,42 @@ impl FilenameBasedDateExtractor {
     }
 
     fn try_parse_patterns(filename: &str) -> Option<NaiveDate> {
-        // Pattern 1: Screenshot_YYYY-MM-DD-HH-MM-SS.ext
-        if let Some(captures) = regex::Regex::new(r"Screenshot_(\d{4})-(\d{2})-(\d{2})")
-            .ok()
-            .and_then(|re| re.captures(filename))
-        {
-            let year: i32 = captures.get(1)?.as_str().parse().ok()?;
-            let month: u32 = captures.get(2)?.as_str().parse().ok()?;
-            let day: u32 = captures.get(3)?.as_str().parse().ok()?;
-            return NaiveDate::from_ymd_opt(year, month, day);
-        }
+        Self::try_parse_screenshot_pattern(filename)
+            .or_else(|| Self::try_parse_compact_datetime_pattern(filename))
+            .or_else(|| Self::try_parse_img_underscore_pattern(filename))
+            .or_else(|| Self::try_parse_img_dash_pattern(filename))
+    }
 
-        // Pattern 2: YYYYMMDD_HHMMSS (with or without -ANIMATION, -MIX, etc.)
-        if let Some(captures) = regex::Regex::new(r"(\d{8})_\d{6}")
-            .ok()
-            .and_then(|re| re.captures(filename))
-        {
-            let date_str = captures.get(1)?.as_str();
-            return NaiveDate::parse_from_str(date_str, "%Y%m%d").ok();
-        }
+    fn try_parse_screenshot_pattern(filename: &str) -> Option<NaiveDate> {
+        let pattern = regex::Regex::new(r"Screenshot_(\d{4})-(\d{2})-(\d{2})").ok()?;
+        let captures = pattern.captures(filename)?;
 
-        // Pattern 3: IMG_YYYYMMDD_HHMMSS.ext
-        if let Some(captures) = regex::Regex::new(r"IMG_(\d{8})_\d{6}")
-            .ok()
-            .and_then(|re| re.captures(filename))
-        {
-            let date_str = captures.get(1)?.as_str();
-            return NaiveDate::parse_from_str(date_str, "%Y%m%d").ok();
-        }
+        let year: i32 = captures.get(1)?.as_str().parse().ok()?;
+        let month: u32 = captures.get(2)?.as_str().parse().ok()?;
+        let day: u32 = captures.get(3)?.as_str().parse().ok()?;
 
-        // Pattern 4: IMG-YYYYMMDD-*.ext
-        if let Some(captures) = regex::Regex::new(r"IMG-(\d{8})")
-            .ok()
-            .and_then(|re| re.captures(filename))
-        {
-            let date_str = captures.get(1)?.as_str();
-            return NaiveDate::parse_from_str(date_str, "%Y%m%d").ok();
-        }
+        NaiveDate::from_ymd_opt(year, month, day)
+    }
 
-        None
+    fn try_parse_compact_datetime_pattern(filename: &str) -> Option<NaiveDate> {
+        let pattern = regex::Regex::new(r"(\d{8})_\d{6}").ok()?;
+        let captures = pattern.captures(filename)?;
+        let date_str = captures.get(1)?.as_str();
+        NaiveDate::parse_from_str(date_str, "%Y%m%d").ok()
+    }
+
+    fn try_parse_img_underscore_pattern(filename: &str) -> Option<NaiveDate> {
+        let pattern = regex::Regex::new(r"IMG_(\d{8})_\d{6}").ok()?;
+        let captures = pattern.captures(filename)?;
+        let date_str = captures.get(1)?.as_str();
+        NaiveDate::parse_from_str(date_str, "%Y%m%d").ok()
+    }
+
+    fn try_parse_img_dash_pattern(filename: &str) -> Option<NaiveDate> {
+        let pattern = regex::Regex::new(r"IMG-(\d{8})").ok()?;
+        let captures = pattern.captures(filename)?;
+        let date_str = captures.get(1)?.as_str();
+        NaiveDate::parse_from_str(date_str, "%Y%m%d").ok()
     }
 }
 
@@ -122,13 +123,9 @@ impl CompositeDateExtractor {
 
 impl DateExtractor for CompositeDateExtractor {
     fn extract_date(&self, filename: &str, image_data: &[u8]) -> Result<NaiveDate> {
-        // Try EXIF first
-        if let Ok(date) = self.exif_extractor.extract_date(filename, image_data) {
-            return Ok(date);
-        }
-
-        // Fall back to filename parsing
-        self.filename_extractor.extract_date(filename, image_data)
+        self.exif_extractor
+            .extract_date(filename, image_data)
+            .or_else(|_| self.filename_extractor.extract_date(filename, image_data))
     }
 }
 

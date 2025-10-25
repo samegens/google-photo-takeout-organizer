@@ -44,7 +44,6 @@ fn main() {
     }
     println!();
 
-    // Create components
     let zip_reader = FileZipImageReader::new(args.input);
     let date_extractor = CompositeDateExtractor::new();
     let path_generator = PathGenerator::new();
@@ -52,15 +51,12 @@ fn main() {
     let existing_collection_filter = ExistingCollectionFilter::new();
     let no_filter = NoFilter::new();
 
-    // Choose filter based on CLI flag
-    // By default (no_filter = false), skip existing collection files
     let filter: &dyn photo_filter::PhotoFilter = if args.no_filter {
-        &no_filter // Don't filter anything
+        &no_filter
     } else {
-        &existing_collection_filter // Skip existing collection files (default)
+        &existing_collection_filter
     };
 
-    // Create organizer
     let organizer = PhotoOrganizer::new(
         &zip_reader,
         &date_extractor,
@@ -69,7 +65,6 @@ fn main() {
         filter,
     );
 
-    // Validate ZIP contents before organizing
     if !args.no_filter {
         if let Err(e) = organizer.validate_no_orphaned_edits() {
             eprintln!("✗ Validation failed: {}", e);
@@ -77,7 +72,6 @@ fn main() {
         }
     }
 
-    // Organize photos
     match organizer.organize() {
         Ok(result) => {
             println!("✓ Organization complete!");

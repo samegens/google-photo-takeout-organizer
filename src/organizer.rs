@@ -110,25 +110,24 @@ impl<'a> PhotoOrganizer<'a> {
     }
 
     fn process_entry(&self, entry: &ZipEntry) -> Result<std::path::PathBuf> {
-        // Extract date from EXIF (with filename fallback)
         let date = self.date_extractor.extract_date(&entry.name, &entry.data)
             .context("Failed to extract date")?;
 
-        // Generate target path (relative)
         let target_path = self.path_generator.generate_path(&date, &entry.name);
 
-        // Create parent directory
-        if let Some(parent) = target_path.parent() {
-            self.file_writer.create_directory(parent)
-                .context("Failed to create directory")?;
-        }
-
-        // Write file
+        self.ensure_parent_directory_exists(&target_path)?;
         self.file_writer.write_file(&target_path, &entry.data)
             .context("Failed to write file")?;
 
-        // Return full path for display
         Ok(self.file_writer.get_full_path(&target_path))
+    }
+
+    fn ensure_parent_directory_exists(&self, path: &std::path::Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            self.file_writer.create_directory(parent)
+                .context("Failed to create directory")?;
+        }
+        Ok(())
     }
 }
 
