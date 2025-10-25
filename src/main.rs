@@ -27,9 +27,9 @@ struct Args {
     #[arg(short, long, default_value = "./organized_photos")]
     output: String,
 
-    /// Skip photos already in your collection (DSLR, Lightroom-processed, or Google-generated -MIX files)
-    #[arg(short = 'e', long)]
-    skip_existing: bool,
+    /// Disable filtering (by default, DSLR/Lightroom/Google -MIX files are skipped)
+    #[arg(short, long)]
+    no_filter: bool,
 }
 
 fn main() {
@@ -37,7 +37,9 @@ fn main() {
 
     println!("Organizing photos from: {}", args.input);
     println!("Output directory: {}", args.output);
-    if args.skip_existing {
+    if args.no_filter {
+        println!("Filtering: Disabled (organizing all photos)");
+    } else {
         println!("Filtering: Skipping existing collection photos (DSLR, Lightroom, Google -MIX files)");
     }
     println!();
@@ -51,10 +53,11 @@ fn main() {
     let no_filter = NoFilter::new();
 
     // Choose filter based on CLI flag
-    let filter: &dyn photo_filter::PhotoFilter = if args.skip_existing {
-        &existing_collection_filter
+    // By default (no_filter = false), skip existing collection files
+    let filter: &dyn photo_filter::PhotoFilter = if args.no_filter {
+        &no_filter // Don't filter anything
     } else {
-        &no_filter
+        &existing_collection_filter // Skip existing collection files (default)
     };
 
     // Create organizer
