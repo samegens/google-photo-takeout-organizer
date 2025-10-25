@@ -8,6 +8,7 @@ use organize_photo_zip::exif::ExifDateExtractor;
 use organize_photo_zip::file_writer::RealFileSystemWriter;
 use organize_photo_zip::organizer::PhotoOrganizer;
 use organize_photo_zip::path_generator::PathGenerator;
+use organize_photo_zip::photo_filter::NoFilter;
 use organize_photo_zip::zip_reader::FileZipReader;
 
 #[test]
@@ -43,12 +44,14 @@ fn test_end_to_end_photo_organization() {
     let date_extractor = ExifDateExtractor::new();
     let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(output_dir.to_string());
+    let filter = NoFilter::new();
 
     let organizer = PhotoOrganizer::new(
         &zip_reader,
         &date_extractor,
         &path_generator,
         &file_writer,
+        &filter,
     );
 
     let result = organizer.organize().expect("Organization failed");

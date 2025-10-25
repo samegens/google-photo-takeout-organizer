@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use crate::exif::DateExtractor;
 use crate::file_writer::FileSystemWriter;
 use crate::path_generator::PathGenerator;
+use crate::photo_filter::PhotoFilter;
 use crate::zip_reader::{ZipEntry, ZipReader};
 
 /// Main orchestrator service that coordinates photo organization
@@ -10,6 +11,7 @@ pub struct PhotoOrganizer<'a> {
     date_extractor: &'a dyn DateExtractor,
     path_generator: &'a PathGenerator,
     file_writer: &'a dyn FileSystemWriter,
+    photo_filter: &'a dyn PhotoFilter,
 }
 
 impl<'a> PhotoOrganizer<'a> {
@@ -18,12 +20,14 @@ impl<'a> PhotoOrganizer<'a> {
         date_extractor: &'a dyn DateExtractor,
         path_generator: &'a PathGenerator,
         file_writer: &'a dyn FileSystemWriter,
+        photo_filter: &'a dyn PhotoFilter,
     ) -> Self {
         Self {
             zip_reader,
             date_extractor,
             path_generator,
             file_writer,
+            photo_filter,
         }
     }
 
@@ -38,6 +42,12 @@ impl<'a> PhotoOrganizer<'a> {
         let mut errors = Vec::new();
 
         for entry in entries {
+            // Apply filter first
+            if !self.photo_filter.should_include(&entry.data) {
+                skipped_files += 1;
+                continue;
+            }
+
             match self.process_entry(&entry) {
                 Ok(_) => organized_files += 1,
                 Err(e) => {
@@ -92,11 +102,10 @@ mod tests {
     use crate::exif::ExifDateExtractor;
     use crate::file_writer::RealFileSystemWriter;
     use crate::path_generator::PathGenerator;
-    use crate::zip_reader::FileZipReader;
+    use crate::photo_filter::{NoFilter, LightroomFilter};
     use chrono::NaiveDate;
     use std::fs;
     use std::path::PathBuf;
-    use zip::write::{FileOptions, ZipWriter};
 
     // Mock implementations for testing
     struct MockZipReader {
@@ -127,12 +136,14 @@ mod tests {
         let date_extractor = ExifDateExtractor::new();
         let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
             &zip_reader,
             &date_extractor,
             &path_generator,
             &file_writer,
+            &filter,
         );
 
         // Act
@@ -163,12 +174,14 @@ mod tests {
         let date_extractor = ExifDateExtractor::new();
         let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
             &zip_reader,
             &date_extractor,
             &path_generator,
             &file_writer,
+            &filter,
         );
 
         // Act
@@ -212,12 +225,14 @@ mod tests {
         let date_extractor = ExifDateExtractor::new();
         let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
             &zip_reader,
             &date_extractor,
             &path_generator,
             &file_writer,
+            &filter,
         );
 
         // Act
@@ -255,12 +270,14 @@ mod tests {
         let date_extractor = ExifDateExtractor::new();
         let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
             &zip_reader,
             &date_extractor,
             &path_generator,
             &file_writer,
+            &filter,
         );
 
         // Act
@@ -290,12 +307,14 @@ mod tests {
         let date_extractor = ExifDateExtractor::new();
         let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
             &zip_reader,
             &date_extractor,
             &path_generator,
             &file_writer,
+            &filter,
         );
 
         // Act
