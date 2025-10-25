@@ -44,13 +44,18 @@ impl<'a> PhotoOrganizer<'a> {
         for entry in entries {
             // Apply filter first
             if !self.photo_filter.should_include(&entry.name, &entry.data) {
+                println!("{}: filtered out", entry.name);
                 skipped_files += 1;
                 continue;
             }
 
             match self.process_entry(&entry) {
-                Ok(_) => organized_files += 1,
+                Ok(target_path) => {
+                    println!("{}: copied to {}", entry.name, target_path.display());
+                    organized_files += 1;
+                }
                 Err(e) => {
+                    println!("{}: error - {}", entry.name, e);
                     skipped_files += 1;
                     errors.push(format!("{}: {}", entry.name, e));
                 }
@@ -65,12 +70,12 @@ impl<'a> PhotoOrganizer<'a> {
         })
     }
 
-    fn process_entry(&self, entry: &ZipEntry) -> Result<()> {
+    fn process_entry(&self, entry: &ZipEntry) -> Result<std::path::PathBuf> {
         // Extract date from EXIF
         let date = self.date_extractor.extract_date(&entry.data)
             .context("Failed to extract date from EXIF")?;
 
-        // Generate target path
+        // Generate target path (relative)
         let target_path = self.path_generator.generate_path(&date, &entry.name);
 
         // Create parent directory
@@ -83,7 +88,8 @@ impl<'a> PhotoOrganizer<'a> {
         self.file_writer.write_file(&target_path, &entry.data)
             .context("Failed to write file")?;
 
-        Ok(())
+        // Return full path for display
+        Ok(self.file_writer.get_full_path(&target_path))
     }
 }
 

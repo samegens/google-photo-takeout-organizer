@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub trait FileSystemWriter {
     fn write_file(&self, path: &Path, data: &[u8]) -> Result<()>;
     fn create_directory(&self, path: &Path) -> Result<()>;
+    fn get_full_path(&self, path: &Path) -> PathBuf;
 }
 
 /// Concrete implementation that writes to the actual filesystem
@@ -40,6 +41,10 @@ impl FileSystemWriter for RealFileSystemWriter {
             .with_context(|| format!("Failed to create directory: {}", full_path.display()))?;
 
         Ok(())
+    }
+
+    fn get_full_path(&self, path: &Path) -> PathBuf {
+        PathBuf::from(&self.base_output_dir).join(path)
     }
 }
 
