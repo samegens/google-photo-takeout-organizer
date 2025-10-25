@@ -6,7 +6,7 @@ pub trait PhotoFilter {
     fn should_include(&self, image_data: &[u8]) -> bool;
 }
 
-/// Filter that skips photos processed by Lightroom
+/// Filter that skips photos processed by Lightroom or from DSLR cameras (Nikon)
 pub struct LightroomFilter;
 
 impl LightroomFilter {
@@ -14,31 +14,41 @@ impl LightroomFilter {
         Self
     }
 
-    fn check_software_field(&self, image_data: &[u8]) -> Option<String> {
+    fn get_exif_field(&self, image_data: &[u8], tag: Tag) -> Option<String> {
         let mut cursor = std::io::Cursor::new(image_data);
         let exif_reader = exif::Reader::new();
 
         let exif_data = exif_reader.read_from_container(&mut cursor).ok()?;
+        let field = exif_data.get_field(tag, In::PRIMARY)?;
 
-        // Get Software field (Tag 0x0131)
-        let software_field = exif_data.get_field(Tag::Software, In::PRIMARY)?;
-
-        Some(software_field.display_value().to_string())
+        Some(field.display_value().to_string())
     }
 }
 
 impl PhotoFilter for LightroomFilter {
     fn should_include(&self, image_data: &[u8]) -> bool {
-        match self.check_software_field(image_data) {
-            Some(software) => {
-                // Reject if software contains "Lightroom"
-                !software.to_lowercase().contains("lightroom")
-            }
-            None => {
-                // No Software field, accept the photo
-                true
+        // Check Software field for Lightroom
+        if let Some(software) = self.get_exif_field(image_data, Tag::Software) {
+            if software.to_lowercase().contains("lightroom") {
+                return false; // Reject Lightroom photos
             }
         }
+
+        // Check Make field for NIKON
+        if let Some(make) = self.get_exif_field(image_data, Tag::Make) {
+            if make.to_uppercase().contains("NIKON") {
+                return false; // Reject Nikon photos
+            }
+        }
+
+        // Check Model field for NIKON
+        if let Some(model) = self.get_exif_field(image_data, Tag::Model) {
+            if model.to_uppercase().contains("NIKON") {
+                return false; // Reject Nikon photos
+            }
+        }
+
+        true // Accept if none of the filters match
     }
 }
 

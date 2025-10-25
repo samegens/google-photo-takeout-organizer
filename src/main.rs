@@ -28,7 +28,7 @@ struct Args {
     #[arg(short, long, default_value = "./organized_photos")]
     output: String,
 
-    /// Skip photos processed by Lightroom (checks EXIF Software field)
+    /// Skip photos from DSLR cameras (Lightroom-processed or Nikon cameras)
     #[arg(short, long)]
     skip_lightroom: bool,
 }
@@ -39,7 +39,7 @@ fn main() {
     println!("Organizing photos from: {}", args.input);
     println!("Output directory: {}", args.output);
     if args.skip_lightroom {
-        println!("Filtering: Skipping Lightroom-processed photos");
+        println!("Filtering: Skipping DSLR photos (Lightroom-processed or Nikon cameras)");
     }
     println!();
 
