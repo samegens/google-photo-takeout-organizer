@@ -6,7 +6,7 @@ mod photo_filter;
 mod zip_image_reader;
 
 use clap::Parser;
-use exif::ExifDateExtractor;
+use exif::CompositeDateExtractor;
 use file_writer::RealFileSystemWriter;
 use organizer::PhotoOrganizer;
 use path_generator::PathGenerator;
@@ -46,7 +46,7 @@ fn main() {
 
     // Create components
     let zip_reader = FileZipImageReader::new(args.input);
-    let date_extractor = ExifDateExtractor::new();
+    let date_extractor = CompositeDateExtractor::new();
     let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(args.output);
     let existing_collection_filter = ExistingCollectionFilter::new();

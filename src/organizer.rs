@@ -110,9 +110,9 @@ impl<'a> PhotoOrganizer<'a> {
     }
 
     fn process_entry(&self, entry: &ZipEntry) -> Result<std::path::PathBuf> {
-        // Extract date from EXIF
-        let date = self.date_extractor.extract_date(&entry.data)
-            .context("Failed to extract date from EXIF")?;
+        // Extract date from EXIF (with filename fallback)
+        let date = self.date_extractor.extract_date(&entry.name, &entry.data)
+            .context("Failed to extract date")?;
 
         // Generate target path (relative)
         let target_path = self.path_generator.generate_path(&date, &entry.name);
@@ -168,7 +168,7 @@ mod tests {
     }
 
     impl DateExtractor for MockDateExtractor {
-        fn extract_date(&self, _image_data: &[u8]) -> Result<NaiveDate> {
+        fn extract_date(&self, _filename: &str, _image_data: &[u8]) -> Result<NaiveDate> {
             Ok(self.date)
         }
     }
