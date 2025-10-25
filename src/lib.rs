@@ -5,4 +5,4 @@ pub mod file_writer;
 pub mod organizer;
 pub mod path_generator;
 pub mod photo_filter;
-pub mod zip_reader;
+pub mod zip_image_reader;

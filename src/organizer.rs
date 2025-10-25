@@ -3,11 +3,11 @@ use crate::exif::DateExtractor;
 use crate::file_writer::FileSystemWriter;
 use crate::path_generator::PathGenerator;
 use crate::photo_filter::PhotoFilter;
-use crate::zip_reader::{ZipEntry, ZipReader};
+use crate::zip_image_reader::{ZipEntry, ZipImageReader};
 
 /// Main orchestrator service that coordinates photo organization
 pub struct PhotoOrganizer<'a> {
-    zip_reader: &'a dyn ZipReader,
+    zip_reader: &'a dyn ZipImageReader,
     date_extractor: &'a dyn DateExtractor,
     path_generator: &'a PathGenerator,
     file_writer: &'a dyn FileSystemWriter,
@@ -16,7 +16,7 @@ pub struct PhotoOrganizer<'a> {
 
 impl<'a> PhotoOrganizer<'a> {
     pub fn new(
-        zip_reader: &'a dyn ZipReader,
+        zip_reader: &'a dyn ZipImageReader,
         date_extractor: &'a dyn DateExtractor,
         path_generator: &'a PathGenerator,
         file_writer: &'a dyn FileSystemWriter,
@@ -157,7 +157,7 @@ mod tests {
         entries: Vec<ZipEntry>,
     }
 
-    impl ZipReader for MockZipReader {
+    impl ZipImageReader for MockZipReader {
         fn read_entries(&self) -> Result<Vec<ZipEntry>> {
             Ok(self.entries.clone())
         }

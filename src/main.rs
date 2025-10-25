@@ -3,7 +3,7 @@ mod file_writer;
 mod organizer;
 mod path_generator;
 mod photo_filter;
-mod zip_reader;
+mod zip_image_reader;
 
 use clap::Parser;
 use exif::ExifDateExtractor;
@@ -11,7 +11,7 @@ use file_writer::RealFileSystemWriter;
 use organizer::PhotoOrganizer;
 use path_generator::PathGenerator;
 use photo_filter::{ExistingCollectionFilter, NoFilter};
-use zip_reader::FileZipReader;
+use zip_image_reader::FileZipImageReader;
 
 /// Organize Google Photos ZIP exports into date-based directory structure
 
@@ -45,7 +45,7 @@ fn main() {
     println!();
 
     // Create components
-    let zip_reader = FileZipReader::new(args.input);
+    let zip_reader = FileZipImageReader::new(args.input);
     let date_extractor = ExifDateExtractor::new();
     let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(args.output);

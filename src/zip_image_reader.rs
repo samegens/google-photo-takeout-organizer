@@ -9,17 +9,17 @@ pub struct ZipEntry {
     pub data: Vec<u8>,
 }
 
-/// Trait for reading ZIP archives
-pub trait ZipReader {
+/// Trait for reading images from ZIP archives
+pub trait ZipImageReader {
     fn read_entries(&self) -> Result<Vec<ZipEntry>>;
 }
 
-/// Concrete implementation that reads ZIP files
-pub struct FileZipReader {
+/// Concrete implementation that reads images from ZIP files on disk
+pub struct FileZipImageReader {
     path: String,
 }
 
-impl FileZipReader {
+impl FileZipImageReader {
     pub fn new(path: String) -> Self {
         Self { path }
     }
@@ -39,7 +39,7 @@ impl FileZipReader {
     }
 }
 
-impl ZipReader for FileZipReader {
+impl ZipImageReader for FileZipImageReader {
     fn read_entries(&self) -> Result<Vec<ZipEntry>> {
         let file = File::open(&self.path)
             .with_context(|| format!("Failed to open ZIP file: {}", self.path))?;
@@ -104,7 +104,7 @@ mod tests {
         // Arrange
         let zip_path = "/tmp/test_empty.zip";
         create_test_zip(zip_path, &[]).expect("Failed to create test zip");
-        let reader = FileZipReader::new(zip_path.to_string());
+        let reader = FileZipImageReader::new(zip_path.to_string());
 
         // Act
         let result = reader.read_entries();
@@ -125,7 +125,7 @@ mod tests {
         let test_data = b"Hello, World!";
         create_test_zip(zip_path, &[("test.jpg", test_data)])
             .expect("Failed to create test zip");
-        let reader = FileZipReader::new(zip_path.to_string());
+        let reader = FileZipImageReader::new(zip_path.to_string());
 
         // Act
         let result = reader.read_entries();
@@ -154,7 +154,7 @@ mod tests {
             ],
         )
         .expect("Failed to create test zip");
-        let reader = FileZipReader::new(zip_path.to_string());
+        let reader = FileZipImageReader::new(zip_path.to_string());
 
         // Act
         let result = reader.read_entries();
@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn test_read_nonexistent_zip_returns_error() {
         // Arrange
-        let reader = FileZipReader::new("/tmp/nonexistent_file.zip".to_string());
+        let reader = FileZipImageReader::new("/tmp/nonexistent_file.zip".to_string());
 
         // Act
         let result = reader.read_entries();
@@ -198,7 +198,7 @@ mod tests {
             ],
         )
         .expect("Failed to create test zip");
-        let reader = FileZipReader::new(zip_path.to_string());
+        let reader = FileZipImageReader::new(zip_path.to_string());
 
         // Act
         let result = reader.read_entries();
@@ -228,7 +228,7 @@ mod tests {
             ],
         )
         .expect("Failed to create test zip");
-        let reader = FileZipReader::new(zip_path.to_string());
+        let reader = FileZipImageReader::new(zip_path.to_string());
 
         // Act
         let result = reader.read_entries();

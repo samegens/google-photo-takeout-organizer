@@ -9,7 +9,7 @@ use organize_photo_zip::file_writer::RealFileSystemWriter;
 use organize_photo_zip::organizer::PhotoOrganizer;
 use organize_photo_zip::path_generator::PathGenerator;
 use organize_photo_zip::photo_filter::NoFilter;
-use organize_photo_zip::zip_reader::FileZipReader;
+use organize_photo_zip::zip_image_reader::FileZipImageReader;
 
 #[test]
 fn test_end_to_end_photo_organization() {
@@ -40,7 +40,7 @@ fn test_end_to_end_photo_organization() {
     zip.finish().expect("Failed to finish ZIP");
 
     // Act: Run the full organization workflow
-    let zip_reader = FileZipReader::new(test_zip_path.to_string());
+    let zip_reader = FileZipImageReader::new(test_zip_path.to_string());
     let date_extractor = ExifDateExtractor::new();
     let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(output_dir.to_string());
