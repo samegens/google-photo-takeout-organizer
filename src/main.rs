@@ -27,7 +27,7 @@ struct Args {
     #[arg(short, long, default_value = "./organized_photos")]
     output: String,
 
-    /// Disable filtering (by default, DSLR/Lightroom/Google -MIX files are skipped)
+    /// Disable filtering (by default, DSLR/Lightroom/Google -MIX/-edited files are skipped)
     #[arg(short, long)]
     no_filter: bool,
 }
@@ -40,7 +40,7 @@ fn main() {
     if args.no_filter {
         println!("Filtering: Disabled (organizing all photos)");
     } else {
-        println!("Filtering: Skipping existing collection photos (DSLR, Lightroom, Google -MIX files)");
+        println!("Filtering: Skipping existing collection photos (DSLR, Lightroom, Google -MIX/-edited files)");
     }
     println!();
 
@@ -68,6 +68,14 @@ fn main() {
         &file_writer,
         filter,
     );
+
+    // Validate ZIP contents before organizing
+    if !args.no_filter {
+        if let Err(e) = organizer.validate_no_orphaned_edits() {
+            eprintln!("✗ Validation failed: {}", e);
+            std::process::exit(1);
+        }
+    }
 
     // Organize photos
     match organizer.organize() {

@@ -28,9 +28,16 @@ impl ExistingCollectionFilter {
 
 impl PhotoFilter for ExistingCollectionFilter {
     fn should_include(&self, filename: &str, image_data: &[u8]) -> bool {
+        let filename_upper = filename.to_uppercase();
+
         // Check filename for Google-generated -MIX files
-        if filename.to_uppercase().contains("-MIX") {
+        if filename_upper.contains("-MIX") {
             return false; // Reject Google-generated MIX files
+        }
+
+        // Check filename for Google-edited files
+        if filename_upper.contains("-EDITED") {
+            return false; // Reject Google-edited photos (validation ensures originals exist)
         }
 
         // Check Software field for Lightroom
@@ -163,4 +170,35 @@ mod tests {
         assert!(!result_uppercase, "Should reject uppercase -MIX");
         assert!(!result_mixed, "Should reject mixed case -MiX");
     }
+
+    #[test]
+    fn test_existing_collection_filter_rejects_edited_files() {
+        // Arrange
+        let filter = ExistingCollectionFilter::new();
+        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
+
+        // Act
+        let result = filter.should_include("DSC_9157-edited.JPG", any_data);
+
+        // Assert
+        assert!(!result, "Google-edited files should be rejected");
+    }
+
+    #[test]
+    fn test_existing_collection_filter_rejects_edited_files_case_insensitive() {
+        // Arrange
+        let filter = ExistingCollectionFilter::new();
+        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
+
+        // Act
+        let result_lowercase = filter.should_include("photo-edited.jpg", any_data);
+        let result_uppercase = filter.should_include("PHOTO-EDITED.JPG", any_data);
+        let result_mixed = filter.should_include("Photo-Edited.jpg", any_data);
+
+        // Assert
+        assert!(!result_lowercase, "Should reject lowercase -edited");
+        assert!(!result_uppercase, "Should reject uppercase -EDITED");
+        assert!(!result_mixed, "Should reject mixed case -Edited");
+    }
 }
+
