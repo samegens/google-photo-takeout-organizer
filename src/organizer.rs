@@ -113,13 +113,21 @@ impl<'a> PhotoOrganizer<'a> {
         let date = self.date_extractor.extract_date(&entry.name, &entry.data)
             .context("Failed to extract date")?;
 
-        let target_path = self.path_generator.generate_path(&date, &entry.name);
+        let filename = self.extract_filename_from_path(&entry.name);
+        let target_path = self.path_generator.generate_path(&date, filename);
 
         self.ensure_parent_directory_exists(&target_path)?;
         self.file_writer.write_file(&target_path, &entry.data)
             .context("Failed to write file")?;
 
         Ok(self.file_writer.get_full_path(&target_path))
+    }
+
+    fn extract_filename_from_path<'b>(&self, full_path: &'b str) -> &'b str {
+        full_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(full_path)
     }
 
     fn ensure_parent_directory_exists(&self, path: &std::path::Path) -> Result<()> {
@@ -445,5 +453,50 @@ mod tests {
 
         // Cleanup
         fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_organize_extracts_filename_from_zip_path() {
+        // Arrange
+        use crate::file_writer::MockFileSystemWriter;
+
+        let test_image = include_bytes!("../tests/fixtures/single_pixel_with_exif.jpg");
+        let zip_reader = MockZipReader {
+            entries: vec![ZipEntry {
+                name: "Takeout/Google Photos/Photos from 2012/IMG_20121006_130932.jpg".to_string(),
+                data: test_image.to_vec(),
+            }],
+        };
+        let date_extractor = ExifDateExtractor::new();
+        let path_generator = PathGenerator::new();
+        let filter = NoFilter::new();
+
+        let mut mock_writer = MockFileSystemWriter::new();
+        mock_writer.expect_create_directory().returning(|_| Ok(()));
+        mock_writer
+            .expect_write_file()
+            .withf(|path, _data| path == &PathBuf::from("2012/2012-10-06/IMG_20121006_130932.jpg"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        mock_writer
+            .expect_get_full_path()
+            .returning(|path| PathBuf::from("/output").join(path));
+
+        let organizer = PhotoOrganizer::new(
+            &zip_reader,
+            &date_extractor,
+            &path_generator,
+            &mock_writer,
+            &filter,
+        );
+
+        // Act
+        let result = organizer.organize();
+
+        // Assert
+        assert!(result.is_ok());
+        let stats = result.unwrap();
+        assert_eq!(stats.total_files, 1);
+        assert_eq!(stats.organized_files, 1);
     }
 }

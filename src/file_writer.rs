@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// Trait for writing files to the filesystem
+#[cfg_attr(test, mockall::automock)]
 pub trait FileSystemWriter {
     fn write_file(&self, path: &Path, data: &[u8]) -> Result<()>;
     fn create_directory(&self, path: &Path) -> Result<()>;
