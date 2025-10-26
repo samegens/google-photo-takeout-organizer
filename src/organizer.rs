@@ -1,9 +1,9 @@
-use anyhow::{Context, Result};
 use crate::exif::DateExtractor;
 use crate::file_writer::FileSystemWriter;
 use crate::path_generator::PathGenerator;
 use crate::photo_filter::PhotoFilter;
 use crate::zip_image_reader::{ZipEntry, ZipImageReader};
+use anyhow::{Context, Result};
 
 /// Main orchestrator service that coordinates photo organization
 pub struct PhotoOrganizer<'a> {
@@ -33,7 +33,9 @@ impl<'a> PhotoOrganizer<'a> {
 
     /// Organize photos from ZIP archive into date-based directory structure
     pub fn organize(&self) -> Result<OrganizeResult> {
-        let entries = self.zip_reader.read_entries()
+        let entries = self
+            .zip_reader
+            .read_entries()
             .context("Failed to read ZIP entries")?;
 
         let total_files = entries.len();
@@ -71,29 +73,30 @@ impl<'a> PhotoOrganizer<'a> {
     }
 
     fn process_entry(&self, entry: &ZipEntry) -> Result<std::path::PathBuf> {
-        let date = self.date_extractor.extract_date(&entry.name, &entry.data)
+        let date = self
+            .date_extractor
+            .extract_date(&entry.name, &entry.data)
             .context("Failed to extract date")?;
 
         let filename = self.extract_filename_from_path(&entry.name);
         let target_path = self.path_generator.generate_path(&date, filename);
 
         self.ensure_parent_directory_exists(&target_path)?;
-        self.file_writer.write_file(&target_path, &entry.data)
+        self.file_writer
+            .write_file(&target_path, &entry.data)
             .context("Failed to write file")?;
 
         Ok(self.file_writer.get_full_path(&target_path))
     }
 
     fn extract_filename_from_path<'b>(&self, full_path: &'b str) -> &'b str {
-        full_path
-            .rsplit('/')
-            .next()
-            .unwrap_or(full_path)
+        full_path.rsplit('/').next().unwrap_or(full_path)
     }
 
     fn ensure_parent_directory_exists(&self, path: &std::path::Path) -> Result<()> {
         if let Some(parent) = path.parent() {
-            self.file_writer.create_directory(parent)
+            self.file_writer
+                .create_directory(parent)
                 .context("Failed to create directory")?;
         }
         Ok(())
@@ -116,7 +119,6 @@ mod tests {
     use crate::file_writer::RealFileSystemWriter;
     use crate::path_generator::PathGenerator;
     use crate::photo_filter::NoFilter;
-    use chrono::NaiveDate;
     use std::fs;
     use std::path::PathBuf;
 
@@ -128,16 +130,6 @@ mod tests {
     impl ZipImageReader for MockZipReader {
         fn read_entries(&self) -> Result<Vec<ZipEntry>> {
             Ok(self.entries.clone())
-        }
-    }
-
-    struct MockDateExtractor {
-        date: NaiveDate,
-    }
-
-    impl DateExtractor for MockDateExtractor {
-        fn extract_date(&self, _filename: &str, _image_data: &[u8]) -> Result<NaiveDate> {
-            Ok(self.date)
         }
     }
 
@@ -273,12 +265,10 @@ mod tests {
         let test_image = include_bytes!("../tests/fixtures/single_pixel_with_exif.jpg");
 
         let zip_reader = MockZipReader {
-            entries: vec![
-                ZipEntry {
-                    name: "photo_oct.jpg".to_string(),
-                    data: test_image.to_vec(),
-                },
-            ],
+            entries: vec![ZipEntry {
+                name: "photo_oct.jpg".to_string(),
+                data: test_image.to_vec(),
+            }],
         };
         let date_extractor = ExifDateExtractor::new();
         let path_generator = PathGenerator::new();
