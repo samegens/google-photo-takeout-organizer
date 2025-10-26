@@ -31,45 +31,6 @@ impl<'a> PhotoOrganizer<'a> {
         }
     }
 
-    /// Validate that no -edited files exist without their originals
-    pub fn validate_no_orphaned_edits(&self) -> Result<()> {
-        let entries = self.zip_reader.read_entries()
-            .context("Failed to read ZIP entries for validation")?;
-
-        let mut orphans = Vec::new();
-
-        // Find all -edited files
-        let edited_files: Vec<&ZipEntry> = entries.iter()
-            .filter(|e| e.name.to_uppercase().contains("-EDITED"))
-            .collect();
-
-        for edited in edited_files {
-            // Construct the original filename by removing -edited (case-insensitive)
-            let original_name = edited.name
-                .replace("-edited", "")
-                .replace("-EDITED", "")
-                .replace("-Edited", "");
-
-            // Check if original exists in the ZIP
-            let has_original = entries.iter().any(|e| e.name == original_name);
-
-            if !has_original {
-                orphans.push(edited.name.clone());
-            }
-        }
-
-        if !orphans.is_empty() {
-            anyhow::bail!(
-                "Found {} -edited file(s) without originals:\n{}\n\n\
-                To preserve these photos, use --no-filter to organize all files.",
-                orphans.len(),
-                orphans.join("\n")
-            );
-        }
-
-        Ok(())
-    }
-
     /// Organize photos from ZIP archive into date-based directory structure
     pub fn organize(&self) -> Result<OrganizeResult> {
         let entries = self.zip_reader.read_entries()
@@ -343,77 +304,6 @@ mod tests {
 
         // Cleanup
         fs::remove_dir_all(temp_dir).ok();
-    }
-
-    #[test]
-    fn test_validate_no_orphaned_edits_passes_with_pairs() {
-        // Arrange
-        let test_image = include_bytes!("../tests/fixtures/single_pixel_with_exif.jpg");
-        let zip_reader = MockZipReader {
-            entries: vec![
-                ZipEntry {
-                    name: "DSC_9157.JPG".to_string(),
-                    data: test_image.to_vec(),
-                },
-                ZipEntry {
-                    name: "DSC_9157-edited.JPG".to_string(),
-                    data: test_image.to_vec(),
-                },
-            ],
-        };
-        let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
-        let file_writer = RealFileSystemWriter::new("/tmp/test".to_string());
-        let filter = NoFilter::new();
-
-        let organizer = PhotoOrganizer::new(
-            &zip_reader,
-            &date_extractor,
-            &path_generator,
-            &file_writer,
-            &filter,
-        );
-
-        // Act
-        let result = organizer.validate_no_orphaned_edits();
-
-        // Assert
-        assert!(result.is_ok(), "Validation should pass when original exists");
-    }
-
-    #[test]
-    fn test_validate_no_orphaned_edits_fails_with_orphan() {
-        // Arrange
-        let test_image = include_bytes!("../tests/fixtures/single_pixel_with_exif.jpg");
-        let zip_reader = MockZipReader {
-            entries: vec![
-                ZipEntry {
-                    name: "DSC_9157-edited.JPG".to_string(),
-                    data: test_image.to_vec(),
-                },
-                // No original DSC_9157.JPG
-            ],
-        };
-        let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
-        let file_writer = RealFileSystemWriter::new("/tmp/test".to_string());
-        let filter = NoFilter::new();
-
-        let organizer = PhotoOrganizer::new(
-            &zip_reader,
-            &date_extractor,
-            &path_generator,
-            &file_writer,
-            &filter,
-        );
-
-        // Act
-        let result = organizer.validate_no_orphaned_edits();
-
-        // Assert
-        assert!(result.is_err(), "Validation should fail when orphaned -edited file exists");
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("DSC_9157-edited.JPG"), "Error should mention the orphaned file");
     }
 
     #[test]

@@ -11,7 +11,7 @@ use file_writer::RealFileSystemWriter;
 use organizer::PhotoOrganizer;
 use path_generator::PathGenerator;
 use photo_filter::{ExistingCollectionFilter, NoFilter};
-use zip_image_reader::FileZipImageReader;
+use zip_image_reader::{FileZipImageReader, ZipImageReader};
 
 /// Organize Google Photos ZIP exports into date-based directory structure
 
@@ -61,7 +61,9 @@ fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, an
     let date_extractor = CompositeDateExtractor::new();
     let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(args.output.clone());
-    let existing_collection_filter = ExistingCollectionFilter::new();
+
+    let all_filenames = collect_filenames_from_zip(&zip_reader)?;
+    let existing_collection_filter = ExistingCollectionFilter::new(all_filenames);
     let no_filter = NoFilter::new();
 
     let filter: &dyn photo_filter::PhotoFilter = if args.no_filter {
@@ -78,18 +80,12 @@ fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, an
         filter,
     );
 
-    validate_zip_contents_if_filtering(&organizer, args.no_filter)?;
     organizer.organize()
 }
 
-fn validate_zip_contents_if_filtering(
-    organizer: &PhotoOrganizer,
-    filtering_disabled: bool,
-) -> Result<(), anyhow::Error> {
-    if !filtering_disabled {
-        organizer.validate_no_orphaned_edits()?;
-    }
-    Ok(())
+fn collect_filenames_from_zip(zip_reader: &FileZipImageReader) -> Result<Vec<String>, anyhow::Error> {
+    let entries = zip_reader.read_entries()?;
+    Ok(entries.into_iter().map(|entry| entry.name).collect())
 }
 
 fn display_results_and_exit(result: Result<organizer::OrganizeResult, anyhow::Error>) -> ! {

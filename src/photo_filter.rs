@@ -1,4 +1,5 @@
 use exif::{In, Tag};
+use std::collections::HashSet;
 
 /// Trait for filtering photos based on criteria
 /// Following Interface Segregation Principle
@@ -8,11 +9,15 @@ pub trait PhotoFilter {
 
 /// Filter that skips photos already in your existing collection
 /// (Lightroom-processed, DSLR cameras like Nikon, or Google-generated -MIX files)
-pub struct ExistingCollectionFilter;
+pub struct ExistingCollectionFilter {
+    all_filenames: HashSet<String>,
+}
 
 impl ExistingCollectionFilter {
-    pub fn new() -> Self {
-        Self
+    pub fn new(filenames: Vec<String>) -> Self {
+        Self {
+            all_filenames: filenames.into_iter().collect(),
+        }
     }
 
     fn get_exif_field(&self, image_data: &[u8], tag: Tag) -> Option<String> {
@@ -24,44 +29,48 @@ impl ExistingCollectionFilter {
 
         Some(field.display_value().to_string())
     }
+
+    fn has_original_file(&self, edited_filename: &str) -> bool {
+        let original_name = edited_filename
+            .replace("-edited", "")
+            .replace("-EDITED", "")
+            .replace("-Edited", "");
+
+        self.all_filenames.contains(&original_name)
+    }
 }
 
 impl PhotoFilter for ExistingCollectionFilter {
     fn should_include(&self, filename: &str, image_data: &[u8]) -> bool {
         let filename_upper = filename.to_uppercase();
 
-        // Check filename for Google-generated -MIX files
         if filename_upper.contains("-MIX") {
-            return false; // Reject Google-generated MIX files
+            return false;
         }
 
-        // Check filename for Google-edited files
         if filename_upper.contains("-EDITED") {
-            return false; // Reject Google-edited photos (validation ensures originals exist)
+            return !self.has_original_file(filename);
         }
 
-        // Check Software field for Lightroom
         if let Some(software) = self.get_exif_field(image_data, Tag::Software) {
             if software.to_lowercase().contains("lightroom") {
-                return false; // Reject Lightroom photos
+                return false;
             }
         }
 
-        // Check Make field for NIKON
         if let Some(make) = self.get_exif_field(image_data, Tag::Make) {
             if make.to_uppercase().contains("NIKON") {
-                return false; // Reject Nikon photos
+                return false;
             }
         }
 
-        // Check Model field for NIKON
         if let Some(model) = self.get_exif_field(image_data, Tag::Model) {
             if model.to_uppercase().contains("NIKON") {
-                return false; // Reject Nikon photos
+                return false;
             }
         }
 
-        true // Accept if none of the filters match
+        true
     }
 }
 
@@ -100,8 +109,7 @@ mod tests {
     #[test]
     fn test_existing_collection_filter_rejects_lightroom_photos() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
-        // This photo has "Adobe Photoshop Lightroom 3.6 (Windows)" in Software field
+        let filter = ExistingCollectionFilter::new(vec!["DSC_9157.JPG".to_string()]);
         let lightroom_photo = include_bytes!("../tests/fixtures/single_pixel_with_exif.jpg");
 
         // Act
@@ -114,9 +122,7 @@ mod tests {
     #[test]
     fn test_existing_collection_filter_accepts_mobile_photos() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
-        // Create a minimal JPEG that will pass (we'll need a non-Lightroom photo)
-        // For now, test that photos without Software field are accepted
+        let filter = ExistingCollectionFilter::new(vec!["phone_photo.jpg".to_string()]);
         let no_software_photo = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
@@ -129,22 +135,20 @@ mod tests {
     #[test]
     fn test_existing_collection_filter_accepts_photos_without_exif() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
-        // Minimal JPEG without EXIF
+        let filter = ExistingCollectionFilter::new(vec!["photo.jpg".to_string()]);
         let no_exif_photo = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
         let result = filter.should_include("photo.jpg", no_exif_photo);
 
         // Assert
-        assert!(result); // Accept if no Software field
+        assert!(result);
     }
 
     #[test]
     fn test_existing_collection_filter_rejects_google_mix_files() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
-        // Any image data (doesn't matter since we're testing filename)
+        let filter = ExistingCollectionFilter::new(vec!["DSC_9157-MIX.jpg".to_string()]);
         let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
@@ -157,7 +161,11 @@ mod tests {
     #[test]
     fn test_existing_collection_filter_rejects_mix_files_case_insensitive() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
+        let filter = ExistingCollectionFilter::new(vec![
+            "photo-mix.jpg".to_string(),
+            "PHOTO-MIX.JPG".to_string(),
+            "Photo-MiX.jpg".to_string(),
+        ]);
         let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
@@ -174,20 +182,30 @@ mod tests {
     #[test]
     fn test_existing_collection_filter_rejects_edited_files() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
+        let filter = ExistingCollectionFilter::new(vec![
+            "DSC_9157.JPG".to_string(),
+            "DSC_9157-edited.JPG".to_string(),
+        ]);
         let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
         let result = filter.should_include("DSC_9157-edited.JPG", any_data);
 
         // Assert
-        assert!(!result, "Google-edited files should be rejected");
+        assert!(!result, "Google-edited files should be rejected when original exists");
     }
 
     #[test]
     fn test_existing_collection_filter_rejects_edited_files_case_insensitive() {
         // Arrange
-        let filter = ExistingCollectionFilter::new();
+        let filter = ExistingCollectionFilter::new(vec![
+            "photo.jpg".to_string(),
+            "photo-edited.jpg".to_string(),
+            "PHOTO.JPG".to_string(),
+            "PHOTO-EDITED.JPG".to_string(),
+            "Photo.jpg".to_string(),
+            "Photo-Edited.jpg".to_string(),
+        ]);
         let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
@@ -196,9 +214,43 @@ mod tests {
         let result_mixed = filter.should_include("Photo-Edited.jpg", any_data);
 
         // Assert
-        assert!(!result_lowercase, "Should reject lowercase -edited");
-        assert!(!result_uppercase, "Should reject uppercase -EDITED");
-        assert!(!result_mixed, "Should reject mixed case -Edited");
+        assert!(!result_lowercase, "Should reject lowercase -edited when original exists");
+        assert!(!result_uppercase, "Should reject uppercase -EDITED when original exists");
+        assert!(!result_mixed, "Should reject mixed case -Edited when original exists");
+    }
+
+    #[test]
+    fn test_existing_collection_filter_keeps_orphaned_edited_files() {
+        // Arrange
+        let all_filenames = vec![
+            "photo1.jpg".to_string(),
+            "photo2-edited.jpg".to_string(),
+        ];
+        let filter = ExistingCollectionFilter::new(all_filenames);
+        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
+
+        // Act
+        let result = filter.should_include("photo2-edited.jpg", any_data);
+
+        // Assert
+        assert!(result, "Should keep -edited file when original doesn't exist");
+    }
+
+    #[test]
+    fn test_existing_collection_filter_rejects_edited_when_original_exists() {
+        // Arrange
+        let all_filenames = vec![
+            "photo1.jpg".to_string(),
+            "photo1-edited.jpg".to_string(),
+        ];
+        let filter = ExistingCollectionFilter::new(all_filenames);
+        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
+
+        // Act
+        let result = filter.should_include("photo1-edited.jpg", any_data);
+
+        // Assert
+        assert!(!result, "Should reject -edited file when original exists");
     }
 }
 

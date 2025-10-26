@@ -60,14 +60,14 @@ impl FilenameBasedDateExtractor {
     }
 
     fn try_parse_patterns(filename: &str) -> Option<NaiveDate> {
-        Self::try_parse_screenshot_pattern(filename)
+        Self::try_parse_date_with_dashes(filename)
             .or_else(|| Self::try_parse_compact_datetime_pattern(filename))
             .or_else(|| Self::try_parse_img_underscore_pattern(filename))
             .or_else(|| Self::try_parse_img_dash_pattern(filename))
     }
 
-    fn try_parse_screenshot_pattern(filename: &str) -> Option<NaiveDate> {
-        let pattern = regex::Regex::new(r"Screenshot_(\d{4})-(\d{2})-(\d{2})").ok()?;
+    fn try_parse_date_with_dashes(filename: &str) -> Option<NaiveDate> {
+        let pattern = regex::Regex::new(r"(\d{4})-(\d{2})-(\d{2})").ok()?;
         let captures = pattern.captures(filename)?;
 
         let year: i32 = captures.get(1)?.as_str().parse().ok()?;
@@ -234,6 +234,21 @@ mod tests {
         assert!(result.is_ok(), "Failed to extract date: {:?}", result.err());
         let date = result.unwrap();
         assert_eq!(date, NaiveDate::from_ymd_opt(2015, 1, 30).unwrap());
+    }
+
+    #[test]
+    fn test_filename_extractor_simple_date_pattern() {
+        // Arrange
+        let extractor = FilenameBasedDateExtractor::new();
+        let filename = "2014-09-29.jpg";
+
+        // Act
+        let result = extractor.extract_date(filename, &[]);
+
+        // Assert
+        assert!(result.is_ok(), "Failed to extract date: {:?}", result.err());
+        let date = result.unwrap();
+        assert_eq!(date, NaiveDate::from_ymd_opt(2014, 9, 29).unwrap());
     }
 
     #[test]
