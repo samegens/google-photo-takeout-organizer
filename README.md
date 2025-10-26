@@ -8,6 +8,19 @@ all photos taken with my mobile phone. With this tool I can make Google Photo Ta
 import them into this structure. Somehow I imported some Lightroom exported photos into Google Photos.
 Since these files are already in my desired structure, I want them skipped automatically.
 
+## How I use Google Takeout
+
+- Log in to your Google account.
+- Go to your [Google Dashboard](https://myaccount.google.com/dashboard?pli=1).
+- Under Photos click on Download.
+- Under 'Create a new export' wait for 'All photo albums included' to appear.
+- Click 'All photo albums included'.
+- Click 'Deselect all' and select the year you want to download and click OK.
+- Click 'Next step'.
+- Leave type, frequency and destination as is, click 'Create export'.
+- Wait for the export to finish, this will take a while.
+- When it's done, download the zip.
+
 ## Features
 
 - **Date-based organization**: Photos organized into `YYYY/YYYY-MM-DD/` structure
