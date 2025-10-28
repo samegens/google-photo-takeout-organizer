@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 pub struct PhotoOrganizer<'a> {
     zip_reader: &'a dyn ZipImageReader,
     date_extractor: &'a dyn DateExtractor,
-    path_generator: &'a PathGenerator,
+    path_generator: &'a PathGenerator<'a>,
     file_writer: &'a dyn FileSystemWriter,
     photo_filter: &'a dyn PhotoFilter,
 }
@@ -18,7 +18,7 @@ impl<'a> PhotoOrganizer<'a> {
     pub fn new(
         zip_reader: &'a dyn ZipImageReader,
         date_extractor: &'a dyn DateExtractor,
-        path_generator: &'a PathGenerator,
+        path_generator: &'a PathGenerator<'a>,
         file_writer: &'a dyn FileSystemWriter,
         photo_filter: &'a dyn PhotoFilter,
     ) -> Self {
@@ -139,8 +139,8 @@ mod tests {
         let temp_dir = "/tmp/test_org_empty";
         let zip_reader = MockZipReader { entries: vec![] };
         let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let path_generator = PathGenerator::new(&file_writer);
         let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
@@ -177,8 +177,8 @@ mod tests {
             }],
         };
         let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let path_generator = PathGenerator::new(&file_writer);
         let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
@@ -228,8 +228,8 @@ mod tests {
             ],
         };
         let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let path_generator = PathGenerator::new(&file_writer);
         let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
@@ -271,8 +271,8 @@ mod tests {
             }],
         };
         let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let path_generator = PathGenerator::new(&file_writer);
         let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
@@ -308,8 +308,8 @@ mod tests {
             }],
         };
         let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
         let file_writer = RealFileSystemWriter::new(temp_dir.to_string());
+        let path_generator = PathGenerator::new(&file_writer);
         let filter = NoFilter::new();
 
         let organizer = PhotoOrganizer::new(
@@ -348,10 +348,12 @@ mod tests {
             }],
         };
         let date_extractor = ExifDateExtractor::new();
-        let path_generator = PathGenerator::new();
         let filter = NoFilter::new();
 
         let mut mock_writer = MockFileSystemWriter::new();
+        mock_writer
+            .expect_find_existing_date_directory()
+            .returning(|_, _| None);
         mock_writer.expect_create_directory().returning(|_| Ok(()));
         mock_writer
             .expect_write_file()
@@ -361,6 +363,8 @@ mod tests {
         mock_writer
             .expect_get_full_path()
             .returning(|path| PathBuf::from("/output").join(path));
+
+        let path_generator = PathGenerator::new(&mock_writer);
 
         let organizer = PhotoOrganizer::new(
             &zip_reader,

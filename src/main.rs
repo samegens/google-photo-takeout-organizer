@@ -59,8 +59,8 @@ fn display_filter_status(filtering_disabled: bool) {
 fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, anyhow::Error> {
     let zip_reader = FileZipImageReader::new(args.input.clone());
     let date_extractor = CompositeDateExtractor::new();
-    let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(args.output.clone());
+    let path_generator = PathGenerator::new(&file_writer);
 
     let all_filenames = collect_filenames_from_zip(&zip_reader)?;
     let existing_collection_filter = ExistingCollectionFilter::new(all_filenames);

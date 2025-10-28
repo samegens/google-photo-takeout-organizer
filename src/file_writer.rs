@@ -8,6 +8,7 @@ pub trait FileSystemWriter {
     fn write_file(&self, path: &Path, data: &[u8]) -> Result<()>;
     fn create_directory(&self, path: &Path) -> Result<()>;
     fn get_full_path(&self, path: &Path) -> PathBuf;
+    fn find_existing_date_directory(&self, year_path: &Path, date_prefix: &str) -> Option<String>;
 }
 
 /// Concrete implementation that writes to the actual filesystem
@@ -45,6 +46,40 @@ impl FileSystemWriter for RealFileSystemWriter {
 
     fn get_full_path(&self, path: &Path) -> PathBuf {
         PathBuf::from(&self.base_output_dir).join(path)
+    }
+
+    fn find_existing_date_directory(&self, year_path: &Path, date_prefix: &str) -> Option<String> {
+        let full_year_path = PathBuf::from(&self.base_output_dir).join(year_path);
+
+        if !full_year_path.exists() {
+            return None;
+        }
+
+        let entries = fs::read_dir(&full_year_path).ok()?;
+
+        for entry in entries.flatten() {
+            if let Some(dir_name) = Self::get_matching_directory(&entry, date_prefix) {
+                return Some(dir_name);
+            }
+        }
+
+        None
+    }
+}
+
+impl RealFileSystemWriter {
+    fn get_matching_directory(entry: &fs::DirEntry, date_prefix: &str) -> Option<String> {
+        if !entry.file_type().ok()?.is_dir() {
+            return None;
+        }
+
+        let dir_name = entry.file_name().to_str()?.to_string();
+
+        if dir_name.starts_with(date_prefix) {
+            Some(dir_name)
+        } else {
+            None
+        }
     }
 }
 
@@ -129,6 +164,42 @@ mod tests {
         // Assert - both should succeed (idempotent)
         assert!(result1.is_ok());
         assert!(result2.is_ok());
+
+        // Cleanup
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_find_existing_date_directory_returns_directory_with_suffix() {
+        // Arrange
+        let temp_dir = "/tmp/test_find_existing_date";
+        let writer = RealFileSystemWriter::new(temp_dir.to_string());
+
+        // Create directory structure: 2025/2025-10-28_special_event
+        let date_dir_with_suffix = PathBuf::from("2025/2025-10-28_special_event");
+        writer.create_directory(&date_dir_with_suffix).unwrap();
+
+        // Act
+        let result = writer.find_existing_date_directory(&PathBuf::from("2025"), "2025-10-28");
+
+        // Assert
+        assert_eq!(result, Some("2025-10-28_special_event".to_string()));
+
+        // Cleanup
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_find_existing_date_directory_returns_none_when_not_found() {
+        // Arrange
+        let temp_dir = "/tmp/test_find_nonexistent";
+        let writer = RealFileSystemWriter::new(temp_dir.to_string());
+
+        // Act
+        let result = writer.find_existing_date_directory(&PathBuf::from("2025"), "2025-10-28");
+
+        // Assert
+        assert_eq!(result, None);
 
         // Cleanup
         fs::remove_dir_all(temp_dir).ok();

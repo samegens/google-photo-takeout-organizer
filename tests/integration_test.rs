@@ -42,8 +42,8 @@ fn test_end_to_end_photo_organization() {
     // Act: Run the full organization workflow
     let zip_reader = FileZipImageReader::new(test_zip_path.to_string());
     let date_extractor = ExifDateExtractor::new();
-    let path_generator = PathGenerator::new();
     let file_writer = RealFileSystemWriter::new(output_dir.to_string());
+    let path_generator = PathGenerator::new(&file_writer);
     let filter = NoFilter::new();
 
     let organizer = PhotoOrganizer::new(
