@@ -13,3 +13,4 @@ regex = "1.10"
 
 [dev-dependencies]
 mockall = "0.13"
+rstest = "0.18"

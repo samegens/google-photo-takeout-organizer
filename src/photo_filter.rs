@@ -1,6 +1,17 @@
 use exif::{In, Tag};
 use std::collections::HashSet;
 
+/// Google duplicate file patterns to filter (uppercase versions)
+const GOOGLE_DUPLICATE_PATTERNS: &[&str] = &[
+    "-MIX",
+    "-EDITED",
+    "-EFFECTS",
+    "-ANIMATION",
+    "-COLLAGE",
+    "-SMILE",
+    "-PANO",
+];
+
 /// Trait for filtering photos based on criteria
 /// Following Interface Segregation Principle
 pub trait PhotoFilter {
@@ -30,11 +41,14 @@ impl ExistingCollectionFilter {
         Some(field.display_value().to_string())
     }
 
-    fn has_original_file(&self, edited_filename: &str) -> bool {
-        let original_name = edited_filename
-            .replace("-edited", "")
-            .replace("-EDITED", "")
-            .replace("-Edited", "");
+    fn has_original_file(&self, duplicate_filename: &str) -> bool {
+        let mut original_name = duplicate_filename.to_string();
+
+        for pattern in GOOGLE_DUPLICATE_PATTERNS {
+            original_name = original_name
+                .replace(pattern, "")
+                .replace(&pattern.to_lowercase(), "");
+        }
 
         self.all_filenames.contains(&original_name)
     }
@@ -44,12 +58,14 @@ impl PhotoFilter for ExistingCollectionFilter {
     fn should_include(&self, filename: &str, image_data: &[u8]) -> bool {
         let filename_upper = filename.to_uppercase();
 
-        if filename_upper.contains("-MIX") {
+        if filename_upper.ends_with(".GIF") {
             return false;
         }
 
-        if filename_upper.contains("-EDITED") {
-            return !self.has_original_file(filename);
+        for pattern in GOOGLE_DUPLICATE_PATTERNS {
+            if filename_upper.contains(pattern) {
+                return !self.has_original_file(filename);
+            }
         }
 
         if let Some(software) = self.get_exif_field(image_data, Tag::Software) {
@@ -92,6 +108,7 @@ impl PhotoFilter for NoFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn test_no_filter_accepts_all() {
@@ -116,7 +133,10 @@ mod tests {
         let result = filter.should_include("DSC_9157.JPG", lightroom_photo);
 
         // Assert
-        assert!(!result, "Lightroom photo should be rejected (should_include = false)");
+        assert!(
+            !result,
+            "Lightroom photo should be rejected (should_include = false)"
+        );
     }
 
     #[test]
@@ -146,40 +166,6 @@ mod tests {
     }
 
     #[test]
-    fn test_existing_collection_filter_rejects_google_mix_files() {
-        // Arrange
-        let filter = ExistingCollectionFilter::new(vec!["DSC_9157-MIX.jpg".to_string()]);
-        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
-
-        // Act
-        let result = filter.should_include("DSC_9157-MIX.jpg", any_data);
-
-        // Assert
-        assert!(!result, "Google-generated MIX files should be rejected");
-    }
-
-    #[test]
-    fn test_existing_collection_filter_rejects_mix_files_case_insensitive() {
-        // Arrange
-        let filter = ExistingCollectionFilter::new(vec![
-            "photo-mix.jpg".to_string(),
-            "PHOTO-MIX.JPG".to_string(),
-            "Photo-MiX.jpg".to_string(),
-        ]);
-        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
-
-        // Act
-        let result_lowercase = filter.should_include("photo-mix.jpg", any_data);
-        let result_uppercase = filter.should_include("PHOTO-MIX.JPG", any_data);
-        let result_mixed = filter.should_include("Photo-MiX.jpg", any_data);
-
-        // Assert
-        assert!(!result_lowercase, "Should reject lowercase -mix");
-        assert!(!result_uppercase, "Should reject uppercase -MIX");
-        assert!(!result_mixed, "Should reject mixed case -MiX");
-    }
-
-    #[test]
     fn test_existing_collection_filter_rejects_edited_files() {
         // Arrange
         let filter = ExistingCollectionFilter::new(vec![
@@ -192,65 +178,96 @@ mod tests {
         let result = filter.should_include("DSC_9157-edited.JPG", any_data);
 
         // Assert
-        assert!(!result, "Google-edited files should be rejected when original exists");
-    }
-
-    #[test]
-    fn test_existing_collection_filter_rejects_edited_files_case_insensitive() {
-        // Arrange
-        let filter = ExistingCollectionFilter::new(vec![
-            "photo.jpg".to_string(),
-            "photo-edited.jpg".to_string(),
-            "PHOTO.JPG".to_string(),
-            "PHOTO-EDITED.JPG".to_string(),
-            "Photo.jpg".to_string(),
-            "Photo-Edited.jpg".to_string(),
-        ]);
-        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
-
-        // Act
-        let result_lowercase = filter.should_include("photo-edited.jpg", any_data);
-        let result_uppercase = filter.should_include("PHOTO-EDITED.JPG", any_data);
-        let result_mixed = filter.should_include("Photo-Edited.jpg", any_data);
-
-        // Assert
-        assert!(!result_lowercase, "Should reject lowercase -edited when original exists");
-        assert!(!result_uppercase, "Should reject uppercase -EDITED when original exists");
-        assert!(!result_mixed, "Should reject mixed case -Edited when original exists");
+        assert!(
+            !result,
+            "Google-edited files should be rejected when original exists"
+        );
     }
 
     #[test]
     fn test_existing_collection_filter_keeps_orphaned_edited_files() {
         // Arrange
-        let all_filenames = vec![
-            "photo1.jpg".to_string(),
-            "photo2-edited.jpg".to_string(),
-        ];
+        let all_filenames = vec!["photo1.jpg".to_string(), "photo2-EDITED.jpg".to_string()];
         let filter = ExistingCollectionFilter::new(all_filenames);
         let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
-        let result = filter.should_include("photo2-edited.jpg", any_data);
+        let result = filter.should_include("photo2-EDITED.jpg", any_data);
 
         // Assert
-        assert!(result, "Should keep -edited file when original doesn't exist");
+        assert!(
+            result,
+            "Should keep -EDITED file when original doesn't exist"
+        );
     }
 
-    #[test]
-    fn test_existing_collection_filter_rejects_edited_when_original_exists() {
+    #[rstest]
+    #[case("animation.gif")]
+    #[case("PHOTO.GIF")]
+    #[case("Image.Gif")]
+    fn test_existing_collection_filter_rejects_gif_files(#[case] filename: &str) {
+        // Arrange
+        let filter = ExistingCollectionFilter::new(vec![]);
+        let gif_data = &[0x47, 0x49, 0x46, 0x38, 0x39, 0x61]; // GIF89a header
+
+        // Act
+        let result = filter.should_include(filename, gif_data);
+
+        // Assert
+        assert!(!result, "Should always reject GIF file: {}", filename);
+    }
+
+    #[rstest]
+    #[case("photo-EFFECTS.jpg", "photo.jpg")]
+    #[case("IMG_1234-ANIMATION.jpg", "IMG_1234.jpg")]
+    #[case("DSC_9876-COLLAGE.jpg", "DSC_9876.jpg")]
+    #[case("pic-SMILE.jpg", "pic.jpg")]
+    #[case("sunset-PANO.jpg", "sunset.jpg")]
+    #[case("sunset-MIX.jpg", "sunset.jpg")]
+    #[case("DSC_9157-edited.JPG", "DSC_9157.JPG")]
+    fn test_existing_collection_filter_rejects_google_duplicates_when_original_exists(
+        #[case] duplicate_filename: &str,
+        #[case] original_filename: &str,
+    ) {
         // Arrange
         let all_filenames = vec![
-            "photo1.jpg".to_string(),
-            "photo1-edited.jpg".to_string(),
+            original_filename.to_string(),
+            duplicate_filename.to_string(),
         ];
         let filter = ExistingCollectionFilter::new(all_filenames);
         let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
 
         // Act
-        let result = filter.should_include("photo1-edited.jpg", any_data);
+        let result = filter.should_include(duplicate_filename, any_data);
 
         // Assert
-        assert!(!result, "Should reject -edited file when original exists");
+        assert!(
+            !result,
+            "Should reject {} when {} exists",
+            duplicate_filename, original_filename
+        );
+    }
+
+    #[rstest]
+    #[case("photo-EFFECTS.jpg")]
+    #[case("IMG_1234-ANIMATION.jpg")]
+    #[case("DSC_9876-COLLAGE.jpg")]
+    #[case("pic-SMILE.jpg")]
+    #[case("sunset-PANO.jpg")]
+    #[case("DSC_9157-edited.JPG")]
+    fn test_existing_collection_filter_keeps_orphaned_google_duplicates(#[case] filename: &str) {
+        // Arrange - no original file exists
+        let filter = ExistingCollectionFilter::new(vec![filename.to_string()]);
+        let any_data = &[0xFF, 0xD8, 0xFF, 0xD9];
+
+        // Act
+        let result = filter.should_include(filename, any_data);
+
+        // Assert
+        assert!(
+            result,
+            "Should keep {} when original doesn't exist",
+            filename
+        );
     }
 }
-
