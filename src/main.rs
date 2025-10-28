@@ -11,15 +11,16 @@ use file_writer::RealFileSystemWriter;
 use organizer::PhotoOrganizer;
 use path_generator::PathGenerator;
 use photo_filter::{ExistingCollectionFilter, NoFilter};
-use zip_image_reader::{FileZipImageReader, ZipImageReader};
+use zip_image_reader::{DirectoryImageReader, FileZipImageReader, ZipImageReader};
+use std::path::Path;
 
-/// Organize Google Photos ZIP exports into date-based directory structure
+/// Organize Google Photos exports into date-based directory structure
 
 #[derive(Parser, Debug)]
 #[command(name = "organize-photo-zip")]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Path to the Google Photos ZIP file
+    /// Path to the Google Photos ZIP file or directory
     #[arg(short, long)]
     input: String,
 
@@ -57,12 +58,26 @@ fn display_filter_status(filtering_disabled: bool) {
 }
 
 fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, anyhow::Error> {
-    let zip_reader = FileZipImageReader::new(args.input.clone());
+    let input_path = Path::new(&args.input);
+
+    if input_path.is_dir() {
+        let reader = DirectoryImageReader::new(args.input.clone());
+        organize_with_reader(&reader, args)
+    } else {
+        let reader = FileZipImageReader::new(args.input.clone());
+        organize_with_reader(&reader, args)
+    }
+}
+
+fn organize_with_reader(
+    reader: &dyn ZipImageReader,
+    args: &Args,
+) -> Result<organizer::OrganizeResult, anyhow::Error> {
     let date_extractor = CompositeDateExtractor::new();
     let file_writer = RealFileSystemWriter::new(args.output.clone());
     let path_generator = PathGenerator::new(&file_writer);
 
-    let all_filenames = collect_filenames_from_zip(&zip_reader)?;
+    let all_filenames = collect_filenames(reader)?;
     let existing_collection_filter = ExistingCollectionFilter::new(all_filenames);
     let no_filter = NoFilter::new();
 
@@ -73,7 +88,7 @@ fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, an
     };
 
     let organizer = PhotoOrganizer::new(
-        &zip_reader,
+        reader,
         &date_extractor,
         &path_generator,
         &file_writer,
@@ -83,8 +98,8 @@ fn organize_photos_from_zip(args: &Args) -> Result<organizer::OrganizeResult, an
     organizer.organize()
 }
 
-fn collect_filenames_from_zip(zip_reader: &FileZipImageReader) -> Result<Vec<String>, anyhow::Error> {
-    let entries = zip_reader.read_entries()?;
+fn collect_filenames(reader: &dyn ZipImageReader) -> Result<Vec<String>, anyhow::Error> {
+    let entries = reader.read_entries()?;
     Ok(entries.into_iter().map(|entry| entry.name).collect())
 }
 

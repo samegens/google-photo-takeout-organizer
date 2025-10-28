@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Read;
+use std::path::Path;
 
 /// Represents a file entry in a ZIP archive
 #[derive(Debug, Clone)]
@@ -74,6 +75,59 @@ impl ZipImageReader for FileZipImageReader {
         }
 
         Ok(entries)
+    }
+}
+
+/// Concrete implementation that reads images from a directory on disk
+pub struct DirectoryImageReader {
+    path: String,
+}
+
+impl DirectoryImageReader {
+    pub fn new(path: String) -> Self {
+        Self { path }
+    }
+}
+
+impl ZipImageReader for DirectoryImageReader {
+    fn read_entries(&self) -> Result<Vec<ZipEntry>> {
+        Self::read_directory_recursive(Path::new(&self.path))
+    }
+}
+
+impl DirectoryImageReader {
+    fn read_directory_recursive(dir: &Path) -> Result<Vec<ZipEntry>> {
+        let dir_entries = fs::read_dir(dir)
+            .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+
+        let mut entries = Vec::new();
+
+        for entry in dir_entries.flatten() {
+            let path = entry.path();
+
+            if path.is_dir() {
+                entries.extend(Self::read_directory_recursive(&path)?);
+            } else if let Some(zip_entry) = Self::try_read_image_file(&path) {
+                entries.push(zip_entry);
+            }
+        }
+
+        Ok(entries)
+    }
+
+    fn try_read_image_file(path: &Path) -> Option<ZipEntry> {
+        let filename = path.to_str()?;
+
+        if !FileZipImageReader::is_image_file(filename) {
+            return None;
+        }
+
+        let data = fs::read(path).ok()?;
+
+        Some(ZipEntry {
+            name: filename.to_string(),
+            data,
+        })
     }
 }
 
@@ -254,5 +308,30 @@ mod tests {
 
         // Assert
         assert!(result, "Should accept MP4 file: {}", filename);
+    }
+
+    #[test]
+    fn test_directory_reader_reads_files_from_directory() {
+        // Arrange
+        let test_dir = "/tmp/test_dir_reader";
+        std::fs::create_dir_all(test_dir).unwrap();
+        std::fs::write(format!("{}/photo1.jpg", test_dir), b"fake jpg data").unwrap();
+        std::fs::write(format!("{}/photo2.png", test_dir), b"fake png data").unwrap();
+        std::fs::write(format!("{}/readme.txt", test_dir), b"should skip").unwrap();
+
+        let reader = DirectoryImageReader::new(test_dir.to_string());
+
+        // Act
+        let result = reader.read_entries();
+
+        // Assert
+        assert!(result.is_ok());
+        let entries = result.unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|e| e.name.ends_with("photo1.jpg")));
+        assert!(entries.iter().any(|e| e.name.ends_with("photo2.png")));
+
+        // Cleanup
+        std::fs::remove_dir_all(test_dir).ok();
     }
 }
