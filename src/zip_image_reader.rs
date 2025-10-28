@@ -36,6 +36,7 @@ impl FileZipImageReader {
             || lower.ends_with(".bmp")
             || lower.ends_with(".tiff")
             || lower.ends_with(".tif")
+            || lower.ends_with(".mp4")
     }
 }
 
@@ -79,6 +80,7 @@ impl ZipImageReader for FileZipImageReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::fs::File;
     use std::io::Write;
     use zip::write::{FileOptions, ZipWriter};
@@ -240,5 +242,17 @@ mod tests {
 
         // Cleanup
         std::fs::remove_file(zip_path).ok();
+    }
+
+    #[rstest]
+    #[case("video.mp4")]
+    #[case("VIDEO.MP4")]
+    #[case("Video.Mp4")]
+    fn test_is_image_file_accepts_mp4(#[case] filename: &str) {
+        // Act
+        let result = FileZipImageReader::is_image_file(filename);
+
+        // Assert
+        assert!(result, "Should accept MP4 file: {}", filename);
     }
 }
